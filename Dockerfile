@@ -1,30 +1,31 @@
-FROM php:7.4-apache
+FROM php:7.4-cli
 
-# Install PHP extensions
-RUN docker-php-ext-install mysqli pdo pdo_mysql
+RUN apt-get update && apt-get install -y \
+    apache2 \
+    libapache2-mod-php7.4 \
+    php7.4-mysql \
+    php7.4-pdo \
+    php7.4-pdo-mysql \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
-WORKDIR /var/www/html
+# Disable conflicting MPM modules
+RUN a2dismod mpm_prefork mpm_worker mpm_event 2>/dev/null || true
 
-# Copy application
-COPY . .
+# Use only mpm_prefork
+RUN a2enmod mpm_prefork
 
-# Set permissions
-RUN chown -R www-data:www-data /var/www/html
-
-# Clean up unnecessary files
-RUN rm -rf /var/www/html/.git* && \
-    rm -rf /var/www/html/Dockerfile && \
-    rm -rf /var/www/html/docker-compose.yml && \
-    rm -rf /var/www/html/railway.* && \
-    rm -rf /var/www/html/.env*
-
-# Enable mod_rewrite only
+# Enable rewrite
 RUN a2enmod rewrite
 
-# Disable all extra modules that might conflict
-RUN a2dismod mpm_worker mpm_event 2>/dev/null || true
+# Set Apache to run in foreground
+RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
+
+COPY . /var/www/html/
+
+RUN chown -R www-data:www-data /var/www/html
+
+RUN rm -rf /var/www/html/.git* /var/www/html/Dockerfile /var/www/html/docker-compose.yml /var/www/html/railway.*
 
 EXPOSE 80
 
-CMD ["apache2-foreground"]
+CMD ["/usr/sbin/apache2ctl", "-D", "FOREGROUND"]
